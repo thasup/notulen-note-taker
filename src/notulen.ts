@@ -1,10 +1,5 @@
 import { executablePath } from "puppeteer";
-import {
-  MeetingResult,
-  NotulenConfig,
-  NotulenInterface,
-  Transribe,
-} from "./interfaces";
+import { MeetingResult, NotulenConfig, NotulenInterface, Transribe } from "./interfaces";
 import { launch, getStream, getStreamOptions, wss } from "puppeteer-stream";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { Browser, Page } from "puppeteer-core";
@@ -29,8 +24,8 @@ declare global {
 
 const logger = pino({
   transport: {
-    target: "pino-pretty",
-  },
+    target: "pino-pretty"
+  }
 });
 
 const defaultStreamOptions: Partial<getStreamOptions> = {
@@ -40,16 +35,16 @@ const defaultStreamOptions: Partial<getStreamOptions> = {
     mandatory: {
       width: { max: 1280 },
       height: { max: 720 },
-      frameRate: { max: 15 },
-    },
-  },
+      frameRate: { max: 15 }
+    }
+  }
 };
 
 export enum RecordingStatus {
   NOT_STARTED = "not_started",
   STARTED = "started",
   PAUSED = "paused",
-  STOPPED = "stopped",
+  STOPPED = "stopped"
 }
 
 export class Notulen extends EventEmitter implements NotulenInterface {
@@ -84,14 +79,15 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     }
 
     // cleanup double slashs
-    this.videoOutput = `${
-      config.recordingLocation
-    }/meeting-${Date.now()}.mp4`.replace(/([^:])(\/\/+)/g, "$1/");
+    this.videoOutput = `${config.recordingLocation}/meeting-${Date.now()}.mp4`.replace(
+      /([^:])(\/\/+)/g,
+      "$1/"
+    );
 
     // merge the streamConfig
     config.streamConfig = {
       ...defaultStreamOptions,
-      ...config.streamConfig,
+      ...config.streamConfig
     };
 
     // default recordMeeting is true
@@ -112,7 +108,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     this.browser = await launch(puppeteer, {
       args: ["--lang=en-US"],
       headless: this.config.debug ? false : ("new" as any),
-      executablePath: executablePath(),
+      executablePath: executablePath()
     });
 
     logger.info("Browser has been started");
@@ -121,9 +117,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
 
     // start video steam if recordMeeting is true
     if (this.config.recordMeeting) {
-      this.videoFileStream = exec(
-        `${ffmpegPath} -y -i - -c:v copy -c:a copy ${this.videoOutput}`
-      );
+      this.videoFileStream = exec(`${ffmpegPath} -y -i - -c:v copy -c:a copy ${this.videoOutput}`);
 
       logger.info("Video stream has been started");
     }
@@ -134,15 +128,12 @@ export class Notulen extends EventEmitter implements NotulenInterface {
 
     await this.page.goto(this.config.googleMeetUrl);
 
-    logger.info(
-      "Google Meet has been opened on the link %s",
-      this.config.googleMeetUrl
-    );
+    logger.info("Google Meet has been opened on the link %s", this.config.googleMeetUrl);
 
     // Waiting for input email appear
     const nameInput = await this.page.waitForSelector(Selector.INPUT_NAME, {
       visible: true,
-      timeout: 0,
+      timeout: 0
     });
     await nameInput.focus();
     await this.page.keyboard.type(this.config.name);
@@ -159,14 +150,14 @@ export class Notulen extends EventEmitter implements NotulenInterface {
         logger.info("Cancel allow mic button has been clicked");
         // Check if selector exists and click it if exists
         await this.page.click(Selector.CANCEL_ALLOW_MIC);
-      },
+      }
     });
 
     // Waiting for Meeting has been started
     logger.info("Waiting for meeting has been started");
     await this.page.waitForSelector(Selector.BUTTON_END_CALL, {
       timeout: 0,
-      visible: true,
+      visible: true
     });
 
     logger.info("Meeting has been started");
@@ -192,17 +183,14 @@ export class Notulen extends EventEmitter implements NotulenInterface {
         logger.info("Keep you safe button exist and will click it");
         // Check if selector exists and click it if exists
         await this.page.click(Selector.MEET_KEEP_YOU_SAFE_BUTTON);
-      },
+      }
     });
 
     // Enable to transribe
     logger.info("Enable transribe");
-    const transribe = await this.page.waitForSelector(
-      Selector.ENABLE_TRANSRIBE_BUTTON,
-      {
-        timeout: 0,
-      }
-    );
+    const transribe = await this.page.waitForSelector(Selector.ENABLE_TRANSRIBE_BUTTON, {
+      timeout: 0
+    });
     await transribe.click();
     logger.info("Transribe has been enabled");
 
@@ -231,20 +219,14 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     //   Selector.TRANSRIBE_SETTING_CLOSE_BUTTON
     // );
     // await closeBtn.click();
-    logger.info(
-      "Transribe language has been changed to %s",
-      this.config.language
-    );
+    logger.info("Transribe language has been changed to %s", this.config.language);
 
     // Check if the participants goes to zero
-    await this.page.exposeFunction(
-      "onParticipantChange",
-      async (current: string) => {
-        // Trigger to stop the meeting
-        await this.stop();
-        logger.info("Participants has been changed to %s", current);
-      }
-    );
+    await this.page.exposeFunction("onParticipantChange", async (current: string) => {
+      // Trigger to stop the meeting
+      await this.stop();
+      logger.info("Participants has been changed to %s", current);
+    });
 
     function onParticipantChange(current: string) {
       // Just for ignoring TS error
@@ -265,9 +247,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     });
 
     // Set the meeting title
-    const meetingTitle = await this.page.waitForSelector(
-      Selector.MEETING_TITLE
-    );
+    const meetingTitle = await this.page.waitForSelector(Selector.MEETING_TITLE);
     this.meetingTitle = await meetingTitle.evaluate((el) => el.textContent);
 
     // Listen if the bot has been kicked from the meeting
@@ -287,20 +267,21 @@ export class Notulen extends EventEmitter implements NotulenInterface {
   private async listenForTransribe() {
     try {
       logger.info("Starting listenForTransribe setup");
-      
+
       // Try the DOM-based approach first
       logger.info("Setting up setTransribe function");
-      await this.page.exposeFunction(
-        "setTransribe",
-        (scripts: any[], lastSpeaker: string) => {
-          logger.info("setTransribe called with %d scripts, last speaker: %s", scripts.length, lastSpeaker);
-          logger.info("--- Start of scripts ---");
-          logger.info(scripts);
-          logger.info("--- End of scripts ---");
-          this.transcribe = scripts;
-        }
-      );
-      
+      await this.page.exposeFunction("setTransribe", (scripts: any[], lastSpeaker: string) => {
+        logger.info(
+          "setTransribe called with %d scripts, last speaker: %s",
+          scripts.length,
+          lastSpeaker
+        );
+        logger.info("--- Start of scripts ---");
+        logger.info(scripts);
+        logger.info("--- End of scripts ---");
+        this.transcribe = scripts;
+      });
+
       logger.info("Evaluating whenSubtitleOn function");
       await this.page.evaluate(whenSubtitleOn);
       logger.info("whenSubtitleOn function evaluated successfully");
@@ -313,7 +294,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
           const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
           recognition.continuous = true;
           recognition.interimResults = true;
-          recognition.lang = document.documentElement.lang || 'en-US';
+          recognition.lang = document.documentElement.lang || "en-US";
           console.log("[Debug] Speech recognition configured with language:", recognition.lang);
 
           recognition.onstart = () => {
@@ -328,26 +309,26 @@ export class Notulen extends EventEmitter implements NotulenInterface {
             console.log("[Debug] Speech recognition ended");
           };
 
-          recognition.onresult = function(event) {
+          recognition.onresult = function (event) {
             console.log("[Debug] Speech recognition got result");
             const transcript = Array.from(event.results)
-              .map(result => result[0].transcript)
-              .join(' ');
+              .map((result) => result[0].transcript)
+              .join(" ");
 
             console.log("[Debug] Transcript:", transcript);
 
             const transribe = {
               speaker: {
-                name: 'Speaker',  // We can't determine speaker from audio
-                profilePicture: '',
+                name: "Speaker", // We can't determine speaker from audio
+                profilePicture: ""
               },
               text: transcript,
-              date: Date.now(),
+              date: Date.now()
             };
 
             // Use window.setTransribe to access the exposed function
             try {
-              (window as any).setTransribe([transribe], 'Speaker');
+              (window as any).setTransribe([transribe], "Speaker");
               console.log("[Debug] Successfully sent transcript to setTransribe");
             } catch (error) {
               console.error("[Debug] Failed to call setTransribe:", error);
@@ -372,7 +353,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     try {
       await this.page.waitForSelector(selector, {
         timeout,
-        visible: true,
+        visible: true
       });
       await cb();
     } catch (error) {
@@ -419,7 +400,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
       googleMeetLink: this.config.googleMeetUrl,
       recordingLocation: this.videoOutput,
       transribe: transcribe,
-      summary: text,
+      summary: text
     };
 
     await this.browser.close();

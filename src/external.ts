@@ -7,26 +7,26 @@ export function whenSubtitleOn() {
   var lastProcessedText = "";
   var accumulatedText = "";
   var processingTimeout = null;
-  var lastSentLength = 0;  // Track the length of last sent transcript
+  var lastSentLength = 0; // Track the length of last sent transcript
 
   function processCaption(captionElement) {
     if (!captionElement) return;
-    
+
     console.log("[Debug] Processing caption element:", captionElement.outerHTML);
 
     // Get the speaker name from the KcIKyf jxFHg class
-    const speakerElement = document.querySelector('.KcIKyf.jxFHg');
-    const speakerName = speakerElement ? speakerElement.textContent?.trim() : 'Unknown Speaker';
+    const speakerElement = document.querySelector(".KcIKyf.jxFHg");
+    const speakerName = speakerElement ? speakerElement.textContent?.trim() : "Unknown Speaker";
 
     // Get the speaker container for profile picture (if needed)
-    const speakerContainer = captionElement.closest('[data-participant-id]') || 
-                           captionElement.closest('[data-self-name]');
+    const speakerContainer =
+      captionElement.closest("[data-participant-id]") || captionElement.closest("[data-self-name]");
 
     const currentText = captionElement.textContent?.trim();
-    
+
     // Skip if this is the same text we just processed
     if (currentText === lastProcessedText) return;
-    
+
     console.log("[Debug] New caption text from speaker:", speakerName, currentText);
 
     // Clear any pending timeout
@@ -40,15 +40,19 @@ export function whenSubtitleOn() {
     // Wait for 2 seconds of no changes before processing
     processingTimeout = setTimeout(() => {
       if (accumulatedText && accumulatedText !== lastProcessedText) {
-        console.log("[Debug] Processing accumulated text from speaker:", speakerName, accumulatedText);
-        
+        console.log(
+          "[Debug] Processing accumulated text from speaker:",
+          speakerName,
+          accumulatedText
+        );
+
         const transribe = {
           speaker: {
             name: speakerName,
-            profilePicture: speakerContainer?.querySelector('img')?.src || '',
+            profilePicture: speakerContainer?.querySelector("img")?.src || ""
           },
           text: accumulatedText,
-          date: Date.now(),
+          date: Date.now()
         };
 
         let shouldSendUpdate = false;
@@ -72,7 +76,11 @@ export function whenSubtitleOn() {
         }
 
         // Only send update if we have new content and it's longer than what we sent before
-        if (shouldSendUpdate && script.length > 0 && script[script.length - 1].text.length > lastSentLength) {
+        if (
+          shouldSendUpdate &&
+          script.length > 0 &&
+          script[script.length - 1].text.length > lastSentLength
+        ) {
           try {
             console.log("[Debug] Sending update with script:", JSON.stringify(script, null, 2));
             setTransribe(script, last_speaker);
@@ -94,13 +102,13 @@ export function whenSubtitleOn() {
 
   // Set up observer for the caption container
   const observer = new MutationObserver((mutations) => {
-    mutations.forEach(mutation => {
+    mutations.forEach((mutation) => {
       // Check if this mutation is related to captions
-      const captionElements = Array.from(mutation.addedNodes)
-        .filter(node => 
+      const captionElements = Array.from(mutation.addedNodes).filter(
+        (node) =>
           node.nodeType === 1 && // Element node
           node.matches?.('[jsname="tgaKEf"].bh44bd.VbkSUe')
-        );
+      );
 
       if (captionElements.length > 0) {
         console.log("[Debug] New caption elements detected:", captionElements.length);
@@ -108,10 +116,9 @@ export function whenSubtitleOn() {
       }
 
       // Also check for text changes in existing caption elements
-      if (mutation.type === 'characterData' || mutation.type === 'childList') {
-        const targetElement = mutation.target.nodeType === 1 
-          ? mutation.target 
-          : mutation.target.parentElement;
+      if (mutation.type === "characterData" || mutation.type === "childList") {
+        const targetElement =
+          mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
 
         if (targetElement?.matches?.('[jsname="tgaKEf"].bh44bd.VbkSUe')) {
           processCaption(targetElement);
