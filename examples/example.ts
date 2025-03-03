@@ -3,10 +3,10 @@ import { MeetingResult } from "../src/interfaces";
 
 async function main() {
   const client = new Notulen({
-    name: "My Assistant",
-    googleMeetUrl: "https://meet.google.com/bvk-ryhf-tkk",
-    language: "id-ID",
     geminiApiKey: "API KEYS",
+    name: "First's Assistant",
+    googleMeetUrl: "https://meet.google.com/uiw-czjk-fju",
+    language: "en-US",
     debug: true,
     recordMeeting: false,
     streamConfig: {
@@ -27,8 +27,9 @@ async function main() {
   await client.listen();
 
   client.on("end", (result: MeetingResult) => {
-    console.log("Summary:");
+    console.log("Transribe:");
     console.log(result.transribe);
+    console.log("Summary:");
     console.log(result.summary);
   });
 }

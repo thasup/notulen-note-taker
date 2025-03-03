@@ -62,7 +62,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     super();
     // check if the prompt is not provided
     if (!config.prompt) {
-      config.prompt = `Kamu adalah seorang Asisten Note Takker, berdasarkan hasil meeting berupa transribe dibawah ini tolong buatkan summary meeting\n`;
+      config.prompt = `You are an Assistant Note Taker, based on the meeting results in the form of the transcript below, please make a summary of the meeting\n`;
     }
 
     // check if the recording location is not provided
