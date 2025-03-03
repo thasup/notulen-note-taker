@@ -20,6 +20,13 @@ import ffmpegPath from "ffmpeg-static";
 import pino from "pino";
 import pinoPretty from "pino-pretty";
 
+declare global {
+  interface Window {
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
+  }
+}
+
 const logger = pino({
   transport: {
     target: "pino-pretty",
@@ -201,29 +208,29 @@ export class Notulen extends EventEmitter implements NotulenInterface {
 
     // change transribe language
     logger.info("Change transribe language to %s", this.config.language);
-    const settingButton = await this.page.waitForSelector(
-      Selector.CAPTION_SETTING,
-      {
-        visible: true,
-        timeout: 0,
-      }
-    );
-    await settingButton.click();
-    await this.page.waitForSelector(Selector.TRANSRIBE_SETTING_CONTAINER);
-    const t = await this.page.waitForSelector(
-      Selector.TRANSRIBE_SETTING_BUTTON
-    );
-    await t.evaluate((b) => b.click());
-    const langId = await this.page.waitForSelector(
-      `li[data-value="${this.config.language}"`
-    );
-    await langId.evaluate((b) => b.click());
-    // wait for 1s using promise
-    await new Promise((r) => setTimeout(r, 1000));
-    const closeBtn = await this.page.waitForSelector(
-      Selector.TRANSRIBE_SETTING_CLOSE_BUTTON
-    );
-    await closeBtn.click();
+    // const settingButton = await this.page.waitForSelector(
+    //   Selector.CAPTION_SETTING,
+    //   {
+    //     visible: true,
+    //     timeout: 0,
+    //   }
+    // );
+    // await settingButton.click();
+    // await this.page.waitForSelector(Selector.TRANSRIBE_SETTING_CONTAINER);
+    // const t = await this.page.waitForSelector(
+    //   Selector.TRANSRIBE_SETTING_BUTTON
+    // );
+    // await t.evaluate((b) => b.click());
+    // const langId = await this.page.waitForSelector(
+    //   `li[data-value="${this.config.language}"`
+    // );
+    // await langId.evaluate((b) => b.click());
+    // // wait for 1s using promise
+    // await new Promise((r) => setTimeout(r, 1000));
+    // const closeBtn = await this.page.waitForSelector(
+    //   Selector.TRANSRIBE_SETTING_CLOSE_BUTTON
+    // );
+    // await closeBtn.click();
     logger.info(
       "Transribe language has been changed to %s",
       this.config.language
@@ -235,6 +242,7 @@ export class Notulen extends EventEmitter implements NotulenInterface {
       async (current: string) => {
         // Trigger to stop the meeting
         await this.stop();
+        logger.info("Participants has been changed to %s", current);
       }
     );
 
@@ -277,14 +285,84 @@ export class Notulen extends EventEmitter implements NotulenInterface {
   }
 
   private async listenForTransribe() {
-    // Start listening for subtitle changes
-    await this.page.exposeFunction(
-      "setTransribe",
-      (scripts: any[], lastSpeaker: string) => {
-        this.transcribe = scripts;
+    try {
+      logger.info("Starting listenForTransribe setup");
+      
+      // Try the DOM-based approach first
+      logger.info("Setting up setTransribe function");
+      await this.page.exposeFunction(
+        "setTransribe",
+        (scripts: any[], lastSpeaker: string) => {
+          logger.info("setTransribe called with %d scripts, last speaker: %s", scripts.length, lastSpeaker);
+          logger.info("--- Start of scripts ---");
+          logger.info(scripts);
+          logger.info("--- End of scripts ---");
+          this.transcribe = scripts;
+        }
+      );
+      
+      logger.info("Evaluating whenSubtitleOn function");
+      await this.page.evaluate(whenSubtitleOn);
+      logger.info("whenSubtitleOn function evaluated successfully");
+
+      // Add WebRTC-based transcription as backup
+      logger.info("Setting up WebRTC speech recognition backup");
+      try {
+        await this.page.evaluate(() => {
+          console.log("[Debug] Setting up speech recognition");
+          const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = document.documentElement.lang || 'en-US';
+          console.log("[Debug] Speech recognition configured with language:", recognition.lang);
+
+          recognition.onstart = () => {
+            console.log("[Debug] Speech recognition started");
+          };
+
+          recognition.onerror = (event) => {
+            console.error("[Debug] Speech recognition error:", event.error);
+          };
+
+          recognition.onend = () => {
+            console.log("[Debug] Speech recognition ended");
+          };
+
+          recognition.onresult = function(event) {
+            console.log("[Debug] Speech recognition got result");
+            const transcript = Array.from(event.results)
+              .map(result => result[0].transcript)
+              .join(' ');
+
+            console.log("[Debug] Transcript:", transcript);
+
+            const transribe = {
+              speaker: {
+                name: 'Speaker',  // We can't determine speaker from audio
+                profilePicture: '',
+              },
+              text: transcript,
+              date: Date.now(),
+            };
+
+            // Use window.setTransribe to access the exposed function
+            try {
+              (window as any).setTransribe([transribe], 'Speaker');
+              console.log("[Debug] Successfully sent transcript to setTransribe");
+            } catch (error) {
+              console.error("[Debug] Failed to call setTransribe:", error);
+            }
+          };
+
+          recognition.start();
+        });
+        logger.info("WebRTC speech recognition setup completed");
+      } catch (error) {
+        logger.error("Failed to setup WebRTC speech recognition:", error);
       }
-    );
-    await this.page.evaluate(whenSubtitleOn);
+    } catch (error) {
+      logger.error("Failed to setup transcription:", error);
+    }
   }
 
   private async waitSelector(
@@ -318,6 +396,9 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     (await wss).close();
 
     // Convert the transribe to summary
+    logger.info("--- Start of transribe ---");
+    logger.info(this.transcribe);
+    logger.info("--- End of transribe ---");
     const transcribe = transribeToText(this.transcribe);
 
     // summary the meeting
@@ -328,6 +409,9 @@ export class Notulen extends EventEmitter implements NotulenInterface {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent(fullPrompt);
+    logger.info("--- Start of full prompt ---");
+    logger.info(fullPrompt);
+    logger.info("--- End of full prompt ---");
     const response = await result.response;
     const text = response.text();
     const meetingResult: MeetingResult = {
